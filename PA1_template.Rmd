@@ -1,0 +1,169 @@
+Reproducible Research Assignment #1
+===================================
+
+Purpose: This assignment analyzes anonymous data from an activity monitoring device and computes various results including the mean and median of steps taken and provides several graphs of the data to help in understanding the behaviour.
+
+## Initialization
+
+Set up the working directory where the data file is located
+
+```{r echo=TRUE}
+setwd("c:/dev/coursera-r/ReproducibleResearch")
+```
+
+## Loading And Preprocessing The Data
+
+The data is stored in a CSV file and the following code is used to load the data and store it in a data frame for further processing.If the data is NA, then replace it with 0.
+
+```{r load_data, echo=TRUE}
+activity <- read.csv("activity.csv")
+```
+
+## Histogram Of Steps Taken Each Day
+
+Compute the number of steps for each day where data is available and create the histogram using ggplot2
+
+```{r daily_steps, fig.width=12}
+library(ggplot2)
+daily_steps <- aggregate(steps ~ date,activity,sum)
+
+ggplot(daily_steps,aes(date)) + geom_histogram(aes(weight=steps,fill= ..count..),binwidth=1) + theme_bw() + xlab("Date") + ylab("Daily Steps") + ggtitle("Total Steps Taken Each Day") + theme(axis.text.x=element_text(angle = -45, hjust = 0))  
+```
+
+## Mean and Median Of Steps Taken Each Day
+
+```{r compute_mean_median}
+daily_mean   <- aggregate(steps ~ date, activity, mean)
+daily_median <- aggregate(steps ~ date, activity, median)
+```
+
+Include the xtable package and then generate html style tables
+
+```{r tables}
+library(xtable)
+table_mean <- xtable(daily_mean)
+table_median <- xtable(daily_median)
+```
+
+### Mean steps taken daily
+
+```{r, results='asis'}
+print(table_mean,type="html")
+```
+
+### Median steps taken daily
+
+```{r,results='asis'}
+print(table_median,type="html")
+```
+
+## Average Daily Activity Pattern
+
+Compute the average number of steps taken in each 5 minute interval
+
+```{r interval_average}
+iave <- aggregate(steps ~ interval, activity, mean)
+```
+
+Create a time series plot of the average steps taken versus the interval
+
+```{r,fig.width=12}
+ggplot(iave,aes(interval,steps)) + geom_line(aes(colour="blue")) + ylab("Average Steps") + xlab("Interval") + ggtitle("Average Steps Taken Over Each 5 Minute Interval") + theme_bw() + theme(legend.position="none")
+```
+
+### 5 Minute Interval With the Maximum Number Of Average Steps
+
+```{r maxsteps}
+max_row <- which.max(iave$steps)
+max_interval <- iave$interval[max_row]
+max_steps <- iave$steps[max_row]
+```
+
+Maximum average steps of `r max_steps` occurs at `r max_interval`
+
+## Imputing missing values
+
+Compute the total number of missing values (NA)
+
+```{r missing_values}
+missing_values <- sum(is.na(activity$steps))
+```
+
+There are `r missing_values` missing values in the data
+
+We will set the missing values to the mean value for that interval and create a new data set
+
+```{r imputed_values}
+imputed_activity <- activity
+fn <- function(steps,interval) ifelse(is.na(steps),iave$steps[iave$interval==interval],steps)
+imputed_activity$steps <- apply(activity[,c('steps','interval')],1,function(y) fn(y['steps'],y['interval']) )
+```
+
+## Histogram Of Steps Taken Each Day Based On Imputed Data
+
+Compute the number of steps for each day from the imputed data and create the histogram
+
+```{r imputed_steps, fig.width=12}
+imputed_steps <- aggregate(steps ~ date,imputed_activity,sum)
+
+ggplot(imputed_steps,aes(date)) + geom_histogram(aes(weight=steps,fill= ..count..),binwidth=1) + theme_bw() + xlab("Date") + ylab("Daily Steps") + ggtitle("Total Steps Taken Each Day Using Imputed Data") + theme(axis.text.x=element_text(angle = -45, hjust = 0))  
+
+```
+
+## Mean and Median Of Steps Taken Each Day Using The Imputed Data
+
+```{r compute_imputed_mean_median}
+imputed_daily_mean   <- aggregate(steps ~ date, imputed_activity, mean)
+imputed_daily_median <- aggregate(steps ~ date, imputed_activity, median)
+```
+
+```{r imputed_tables}
+imputed_table_mean <- xtable(imputed_daily_mean)
+imputed_table_median <- xtable(imputed_daily_median)
+```
+
+### Mean steps taken daily using Imputed Data
+
+```{r, results='asis'}
+print(imputed_table_mean,type="html")
+```
+
+### Median steps taken daily using Imputed Data
+
+```{r,results='asis'}
+print(imputed_table_median,type="html")
+```
+
+## Weekdays and Weekends
+
+Add a factor to the imputed data frame that describes whether the date is a weekday or weekend
+
+```{r dayofweek}
+dowfunc <- function(d) ifelse(is.na(match(weekdays(d),c("Saturday","Sunday"))),"weekday","weekend")
+imputed_activity$dow <- factor(apply(imputed_activity[c('date')],1,function(y) dowfunc(as.Date(y['date']))))
+```
+
+Create a time series plot of the average steps taken versus the interval on a weekday and a time series plot of the average steps over the interval on the weekend.
+
+Tried 2 versions of a lattice graph using xyplot and ggplot but was unable to determine why the graph was messy and had extra lines in it. 
+
+Resorted to the last version of graphs which are separate but seem to accurately capture the data for the weekend.
+
+
+```{r,fig.width=12}
+
+weekend_activity <- imputed_activity[imputed_activity$dow=="weekend",]
+weekday_activity <- imputed_activity[imputed_activity$dow=="weekday",]
+weekend_ave <- aggregate(steps ~ interval, weekend_activity, mean)
+weekday_ave <- aggregate(steps ~ interval, weekday_activity, mean)
+
+library(lattice)
+xyplot(steps ~ interval| dow,data=imputed_activity,layout=c(1,2),type="l")
+ggplot(imputed_activity, aes(x=interval, y=steps, group=dow)) + geom_line() + facet_grid( dow ~ .)
+
+layout(matrix(c(1,1,2,2), 2, 2, byrow = TRUE))
+plot(weekend_ave$interval,weekend_ave$steps,type="l")
+plot(weekday_ave$interval,weekday_ave$steps,type="l")
+
+
+```
